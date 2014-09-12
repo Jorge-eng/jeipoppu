@@ -11,23 +11,32 @@
 # You must have boto installed
 import boto
 from boto.dynamodb2.table import Table
+from boto.dynamodb2.items import Item
 from boto.dynamodb2 import *
 from boto import kinesis
 import ConfigParser
 import sys
 import os
 import socket
+import time
 
 sys.path.append('.')
 
 
 k_config_section_amazon = 'amazon'
+k_config_section_server = 'server'
+
 k_config_item_region = 'region'
 k_config_item_kinesisstream = 'kinesis-stream'
 k_config_item_dynamodbtable = 'dynamodb-table'
+k_config_item_heartbeat_timeout = 'heartbeat-timeout'
 
 k_env_name_for_amazon_id = 'AWS_ACCESS_KEY_ID'
 k_env_name_for_amazon_secret_key = 'AWS_SECRET_KEY'
+
+k_key_shard = 'shard'
+k_key_time = 'time'
+k_key_owner = 'owner'
 
 # 1) Get your info, like host name, that uniquely identifies this instance
 #
@@ -61,15 +70,24 @@ class KinesisStreamReader():
 
     def CloseConnection(self):
         self.conn.close()
-
+        
+    def GetShardIds(self):
+        response = self.conn.describe_stream(self.stream)
+        shards = response['StreamDescription']['Shards']
+        ids = []
+        for shard in shards:
+            ids.append(shard['ShardId'])
+            
+        return ids
     
 class DynamoDbPoller():
-    def __init__(self, region, table, aws_id, aws_key, host_id):
+    def __init__(self, region, table, aws_id, aws_key, host_id, heartbeat_timeout):
         self.region = region
         self.table = table
         self.aws_id = aws_id
         self.aws_key = aws_key
         self.host_id = host_id
+        self.heartbeat_timeout = heartbeat_timeout
         
         
     def InitalizeConnection(self):
@@ -81,8 +99,26 @@ class DynamoDbPoller():
     def CloseConnection(self):
         self.conn.close()
         
+    
+    def FindUnownedShards(self):
+        now = time.time()
         
+        db = Table(self.table)
+        results = db.scan()
+
+        free_shards = []
+        for r in results:
+            if r.has_key(k_key_shard) and r.has_key(k_key_time) and r.has_key(k_key_owner):
+                rtime = r[k_key_time]
+                
+                if time - rtime > self.heartbeat_timeout:
+                    free_shards.append(r[k_key_shard])
+                    
+        return free_shards   
+                
      
+    def Claim
+        
 def Init(configFileName):    
     
     #read config file
@@ -94,6 +130,7 @@ def Init(configFileName):
     region = config.get(k_config_section_amazon, k_config_item_region)
     kstream = config.get(k_config_section_amazon, k_config_item_kinesisstream)
     dynamotable = config.get(k_config_section_amazon, k_config_item_dynamodbtable)
+    heartbeat_timeout = config.get(k_config_section_server,k_config_item_heartbeat_timeout)
     
     #get secret stuff
     access_key_id = os.getenv(k_env_name_for_amazon_id)
@@ -103,7 +140,7 @@ def Init(configFileName):
     host_id = socket.gethostname()
     
     #create poller
-    dbpoller = DynamoDbPoller(region,dynamotable, access_key_id, secret_access_key, host_id)
+    dbpoller = DynamoDbPoller(region,dynamotable, access_key_id, secret_access_key, host_id, heartbeat_timeout)
     kreader = KinesisStreamReader(region, kstream,access_key_id, secret_access_key)
     
     
