@@ -1,0 +1,5 @@
+[amazon]
+region: us-east-1
+kinesis-stream: audio_features
+dynamodb-table: AudioFeaturesConsumer
+
