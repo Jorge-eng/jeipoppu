@@ -9,11 +9,6 @@
 #
 
 # You must have boto installed
-import boto
-from boto.dynamodb2.table import Table
-from boto.dynamodb2.items import Item
-from boto.dynamodb2 import *
-from boto import kinesis
 import ConfigParser
 import sys
 import os
@@ -22,6 +17,8 @@ import time
 
 sys.path.append('.')
 
+from DynamoDbPolloer import DynamoDbPolloer
+from KinesisStreamReader import KinesisStreamReader
 
 k_config_section_amazon = 'amazon'
 k_config_section_server = 'server'
@@ -44,81 +41,19 @@ k_key_owner = 'owner'
 # 
 # 3) Go check the AudioFeaturesConsumer table on our dynamo DB 
 #     -Query to see if there are any free shards to consume
+#     -Pick a random one and claim ownership of it
 #     -"Free" means no one has touched the shard in the last N seconds, where N is the heartbeat period.
 #  
 # 4) Take ownership of the shard. 
-#     -Write to shard record, saying that I own it, and here's the timestamp I took ownership
-#     -Read from record after a few seconds, to verify that I did indeed take ownership (someone else may have beaten me to it)
-#     - If I own it, start processing the shard, otherwise repeat the above process until all shards are owned
+#     -Write to shard record, saying that I own it, and here's the timestamp I took ownership, conditional upon its update time
+#     -if write fails because time was already updated,  repeat the above processes until all shards are owned
+#     -Otherwise,  if I own it, start processing the shard, 
 #
 #  5) Processing the shard  
 #     -Periodically pull from the shard,
 #     -Take the data and put it over to our machine learning module
 #     -Take the result of the machine learning module and ship it off... somewhere.
 
-
-class KinesisStreamReader():
-    def __init__(self, region, stream, aws_id, aws_key): 
-        self.region = region
-        self.stream = stream
-        self.aws_id = aws_id
-        self.aws_key = aws_key
-        self.auth = {'aws_access_key_id':self.aws_id,'aws_secret_access_key' : self.aws_key }
-
-    def InitalizeConnection(self):
-        self.conn = kinesis.connect_to_region(self.region, **self.auth)
-
-    def CloseConnection(self):
-        self.conn.close()
-        
-    def GetShardIds(self):
-        response = self.conn.describe_stream(self.stream)
-        shards = response['StreamDescription']['Shards']
-        ids = []
-        for shard in shards:
-            ids.append(shard['ShardId'])
-            
-        return ids
-    
-class DynamoDbPoller():
-    def __init__(self, region, table, aws_id, aws_key, host_id, heartbeat_timeout):
-        self.region = region
-        self.table = table
-        self.aws_id = aws_id
-        self.aws_key = aws_key
-        self.host_id = host_id
-        self.heartbeat_timeout = heartbeat_timeout
-        
-        
-    def InitalizeConnection(self):
-        self.conn = boto.dynamodb2.connect_to_region(self.region, 
-                        aws_access_key_id=self.aws_id, 
-                        aws_secret_access_key=self.aws_key) 
-                        
-                        
-    def CloseConnection(self):
-        self.conn.close()
-        
-    
-    def FindUnownedShards(self):
-        now = time.time()
-        
-        db = Table(self.table)
-        results = db.scan()
-
-        free_shards = []
-        for r in results:
-            if r.has_key(k_key_shard) and r.has_key(k_key_time) and r.has_key(k_key_owner):
-                rtime = r[k_key_time]
-                
-                if time - rtime > self.heartbeat_timeout:
-                    free_shards.append(r[k_key_shard])
-                    
-        return free_shards   
-                
-     
-    def Claim
-        
 def Init(configFileName):    
     
     #read config file
@@ -130,8 +65,8 @@ def Init(configFileName):
     region = config.get(k_config_section_amazon, k_config_item_region)
     kstream = config.get(k_config_section_amazon, k_config_item_kinesisstream)
     dynamotable = config.get(k_config_section_amazon, k_config_item_dynamodbtable)
-    heartbeat_timeout = config.get(k_config_section_server,k_config_item_heartbeat_timeout)
-    
+    heartbeat_timeout = float(config.get(k_config_section_server,k_config_item_heartbeat_timeout))
+
     #get secret stuff
     access_key_id = os.getenv(k_env_name_for_amazon_id)
     secret_access_key = os.getenv(k_env_name_for_amazon_secret_key)
@@ -146,6 +81,8 @@ def Init(configFileName):
     
     kreader.InitalizeConnection()
     dbpoller.InitalizeConnection()
+    
+    shard_ids = kreader.GetShardIds()
     
     return (kreader, dbpoller)
     
