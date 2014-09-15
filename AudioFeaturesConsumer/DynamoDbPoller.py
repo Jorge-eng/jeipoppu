@@ -13,7 +13,7 @@ import time
 import random
 k_default_local_port = 7777
 
-class DynamoDbPoller():
+class DynamoDbPoller(object):
     def __init__(self, region, table, aws_id, aws_key, host_id, heartbeat_timeout):
         self.region = region
         self.table = table
@@ -26,7 +26,7 @@ class DynamoDbPoller():
      
      #note -- only use this if you're going to create your local table...
      #           these options are probably not right for production
-    def CreateMyTable(self):
+    def create_my_table(self):
         attributes = [{'AttributeName': 'id','AttributeType': 'S'}]
         schema = [{'AttributeName' : 'id','KeyType':'HASH'}]
         throughput = {'ReadCapacityUnits': 1, 'WriteCapacityUnits': 1}
@@ -37,7 +37,7 @@ class DynamoDbPoller():
         #item = {'id':{'S':'myid'},'foo':{'N':'1'}}
         #self.conn.put_item(self.table,item=item)
 
-    def IsMyTableExist(self):
+    def table_exists(self):
         tables =  self.conn.list_tables()['TableNames']
         
         if self.table in tables:
@@ -45,16 +45,16 @@ class DynamoDbPoller():
         else:
             return False
 
-    def InitializeConnection(self):
+    def init_connection(self):
         print ('Region: %s' % (self.region))
         
         if self.region == 'local':
             print ('using 127.0.0.1')
             self.conn = DynamoDBConnection(host='127.0.0.1',port=k_default_local_port,is_secure=False)
             
-            if not self.IsMyTableExist():
+            if not self.table_exists():
                 print 'Creating Table %s' % self.table 
-                self.CreateMyTable()
+                self.create_my_table()
                 
         else:
             self.conn = boto.dynamodb2.connect_to_region(self.region, 
@@ -62,15 +62,15 @@ class DynamoDbPoller():
                         aws_secret_access_key=self.aws_key) 
                         
              
-    def GetTable(self):
+    def get_table(self):
         table = Table(self.table) #takes string argument
         table.connection  = self.conn #important if the local connection is used, because by default it starts with us-east-1
         return table
         
-    def CloseConnection(self):
+    def close_connection(self):
         self.conn.close()
     
-    def UpdateHeartbeat(self, shard):
+    def update_heartbeat(self, shard):
         table = self.GetTable()
         
         try:
@@ -95,7 +95,7 @@ class DynamoDbPoller():
 
         
     #returns id of claimed shard
-    def ClaimFirstAvailableShard(self, shard_ids):     
+    def claim_first_available_shard(self, shard_ids):     
         #randomize order of shards
         shards = copy.deepcopy(shard_ids)
         random.shuffle(shards)
@@ -103,7 +103,7 @@ class DynamoDbPoller():
         myshard = None
         for shard in shards:
             
-            myshard = self.ClaimShardIfExpired(shard) 
+            myshard = self.claim_shard_if_expired(shard) 
             
             if myshard is not None:
                 break;
@@ -111,11 +111,11 @@ class DynamoDbPoller():
         return myshard
         
 
-    def ClaimShardIfExpired(self, shard):
+    def claim_shard_if_expired(self, shard):
         myshard = None
         
          #get table
-        table = self.GetTable()
+        table = self.get_table()
         
         #put, conditional on the time
         now = int(time.time())
@@ -134,7 +134,7 @@ class DynamoDbPoller():
                 if myitem.save():
                     myshard = shard
                     
-        except ItemNotFound:
+        except ItemNotFound, e:
             #gah! This shard tracking item does not exist yet.  Got put in a new one
             newitem = Item(table,data={'id':shard,'time':now, 'host':self.host_id})
             try:
@@ -144,7 +144,7 @@ class DynamoDbPoller():
 
                 print ('Shard %s did not exist yet... creating' % shard)
                     
-            except ConditionalCheckFailedException:
+            except ConditionalCheckFailedException, e:
                 #argh, someone saved this item before me!  try another shard.
                 foo = 3
                     

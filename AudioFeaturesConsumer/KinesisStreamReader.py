@@ -1,7 +1,7 @@
 #!/usr/bin/python
 from boto import kinesis
 
-class KinesisStreamReader():
+class KinesisStreamReader(object):
     def __init__(self, region, stream, aws_id, aws_key): 
         self.region = region
         self.stream = stream
@@ -9,13 +9,13 @@ class KinesisStreamReader():
         self.aws_key = aws_key
         self.auth = {'aws_access_key_id':self.aws_id,'aws_secret_access_key' : self.aws_key }
 
-    def InitalizeConnection(self):
+    def init_connection(self):
         self.conn = kinesis.connect_to_region(self.region, **self.auth)
 
-    def CloseConnection(self):
+    def close_connection(self):
         self.conn.close()
         
-    def GetShardIds(self):
+    def get_shard_ids(self):
         response = self.conn.describe_stream(self.stream)
         shards = response['StreamDescription']['Shards']
         ids = []
