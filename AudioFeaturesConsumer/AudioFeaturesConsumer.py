@@ -14,6 +14,11 @@ import sys
 import os
 import socket
 import time
+import threading
+import signal
+import sys
+import time
+import datetime
 
 sys.path.append('.')
 
@@ -54,8 +59,36 @@ k_key_owner = 'owner'
 #     -Take the data and put it over to our machine learning module
 #     -Take the result of the machine learning module and ship it off... somewhere.
 
-def init(config_file_name):    
+g_timer = None
+
+
     
+class HeartbeatTimer(threading.Thread):
+    def __init__(self, poller, shard, heartbeat_period):
+        threading.Thread.__init__(self)
+        self.poller = poller
+        self.shard = shard
+        self.heartbeat_period = heartbeat_period
+        self.kill = False
+
+    def heartbeat(self):
+        if (self.poller.update_heartbeat(self.shard)):
+            print ('heartbeat ' +  time.strftime("%c"))
+        else:
+            print 'FAILBEAT'
+        
+    def cancel(self):
+        self.kill = True
+        
+    def run(self):
+        while (not self.kill):
+            time.sleep(self.heartbeat_period)
+            self.heartbeat()
+            
+        print ('Succesful thread shutdown')
+            
+def init(config_file_name):
+    global g_timer
     #read config file
     config = ConfigParser.ConfigParser()
     f = open(config_file_name)
@@ -84,10 +117,48 @@ def init(config_file_name):
     
     shard_ids = kreader.get_shard_ids()
     
-    return (kreader, dbpoller)
+    myshard = dbpoller.claim_first_available_shard(shard_ids)
+
+    success = False
     
+    #set up heartbeat timer
+    if myshard is not None:
+        print ('Claimed shard %s' % (myshard))
+      
+        interval = heartbeat_timeout/2
+        print ('starting heartbeat timer with interval of %d seconds' % (interval))
+        
+        g_timer = HeartbeatTimer(dbpoller, myshard, interval)
+        g_timer.start()
+
+        success = True
+    
+    return (success, kreader)
+    
+def deinit():
+    global g_timer
+
+    if g_timer is not None:
+        g_timer.cancel()
+        
+    foo = 3
+
+def signal_handler(signal, frame):
+        print ('caught the ctrl-c')
+        deinit()
+        sys.exit(0)
+
 if __name__ == '__main__':
+
+    signal.signal(signal.SIGINT, signal_handler)
+
     config_file_name = sys.argv[1]
-    init(config_file_name)
+    success, kreader = init(config_file_name)
+    
+    if (success is True):
+        while(True):
+            time.sleep(10)
+    else:
+        print ('Failed to initialize because we could not find a free shard.')
     
     

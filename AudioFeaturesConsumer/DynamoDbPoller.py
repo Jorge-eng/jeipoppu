@@ -33,9 +33,6 @@ class DynamoDbPoller(object):
 
         self.conn.create_table(attributes,self.table,schema,throughput)
         
-        #example -- put an item in 
-        #item = {'id':{'S':'myid'},'foo':{'N':'1'}}
-        #self.conn.put_item(self.table,item=item)
 
     def table_exists(self):
         tables =  self.conn.list_tables()['TableNames']
@@ -71,14 +68,14 @@ class DynamoDbPoller(object):
         self.conn.close()
     
     def update_heartbeat(self, shard):
-        table = self.GetTable()
+        table = self.get_table()
         
         try:
             myitem = table.get_item(id=shard)
         
             now = int(time.time())
             host = str(myitem['host'])
-            print len(host), len(self.host_id), host, self.host_id
+
             if host  != self.host_id:
                 print ('Another poller named %s replaced me (%s) for shard %s.  Oh the humanity (this was not expected).' %  (host,self.host_id, shard))
                 return False

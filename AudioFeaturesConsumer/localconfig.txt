@@ -1,0 +1,7 @@
+[amazon]
+region: local
+kinesis-stream: audio_features
+dynamodb-table: AudioFeaturesConsumer
+
+[server]
+heartbeat-timeout: 4
