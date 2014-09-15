@@ -54,7 +54,7 @@ k_key_owner = 'owner'
 #     -Take the data and put it over to our machine learning module
 #     -Take the result of the machine learning module and ship it off... somewhere.
 
-def Init(configFileName):    
+def init(config_file_name):    
     
     #read config file
     config = ConfigParser.ConfigParser()
@@ -79,15 +79,15 @@ def Init(configFileName):
     kreader = KinesisStreamReader(region, kstream,access_key_id, secret_access_key)
     
     
-    kreader.InitalizeConnection()
-    dbpoller.InitalizeConnection()
+    kreader.init_connection()
+    dbpoller.init_connection()
     
-    shard_ids = kreader.GetShardIds()
+    shard_ids = kreader.get_shar_ids()
     
     return (kreader, dbpoller)
     
 if __name__ == '__main__':
-    configFileName = sys.argv[1]
-    Init(configFileName)
+    config_file_name = sys.argv[1]
+    init(config_file_name)
     
     
