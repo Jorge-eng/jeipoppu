@@ -17,7 +17,7 @@ import time
 
 sys.path.append('.')
 
-from DynamoDbPolloer import DynamoDbPolloer
+from DynamoDbPoller import DynamoDbPoller
 from KinesisStreamReader import KinesisStreamReader
 
 k_config_section_amazon = 'amazon'
@@ -58,7 +58,7 @@ def init(config_file_name):
     
     #read config file
     config = ConfigParser.ConfigParser()
-    f = open(configFileName)
+    f = open(config_file_name)
     config.readfp(f)
     f.close()
     
@@ -82,7 +82,7 @@ def init(config_file_name):
     kreader.init_connection()
     dbpoller.init_connection()
     
-    shard_ids = kreader.get_shar_ids()
+    shard_ids = kreader.get_shard_ids()
     
     return (kreader, dbpoller)
     
