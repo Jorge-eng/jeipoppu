@@ -10,6 +10,10 @@ class KinesisStreamReader(object):
         self.aws_id = aws_id
         self.aws_key = aws_key
         self.auth = {'aws_access_key_id':self.aws_id,'aws_secret_access_key' : self.aws_key }
+        self.next_iterator = None
+        
+    def reset_position_to_horizon(self):
+        self.next_iterator = None
 
     def init_connection(self):
         if self.region != 'local':
@@ -17,6 +21,28 @@ class KinesisStreamReader(object):
 
     def close_connection(self):
         self.conn.close()
+        
+    def set_shard(self, shard):
+        self.myshard = shard
+        
+    def get_next_records(self, record_limit = 25):
+        if self.next_iterator is None:
+            response = self.conn.get_shard_iterator(self.stream,self.myshard,'TRIM_HORIZON')
+            self.next_iterator = response['ShardIterator']
+        
+        records = []
+        
+        try:
+            response = self.conn.get_records(self.next_iterator, limit=record_limit)
+            self.next_iterator = response['NextShardIterator']
+            records = response['Records']
+            
+        except  Exception, e:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            print ''.join('!! ' + line for line in lines)  # Log it or whatever here
+        
+        return records
         
     def get_shard_ids(self):
         if self.region != 'local':

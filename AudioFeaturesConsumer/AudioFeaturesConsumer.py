@@ -40,6 +40,8 @@ k_key_shard = 'shard'
 k_key_time = 'time'
 k_key_owner = 'owner'
 
+k_idle_wait_period_to_poll_stream = 10
+
 # 1) Get your info, like host name, that uniquely identifies this instance
 #
 # 2) Go to Kinesis on the cloud and see how many shards there are, and what their id is.
@@ -129,9 +131,12 @@ def init(config_file_name):
         print ('starting heartbeat timer with interval of %d seconds' % (interval))
         
         g_timer = HeartbeatTimer(dbpoller, myshard, interval)
+        g_timer.setDaemon(True)
         g_timer.start()
 
         success = True
+        
+        kreader.set_shard(myshard)
     
     return (success, kreader)
     
@@ -141,8 +146,8 @@ def deinit():
     if g_timer is not None:
         g_timer.cancel()
         
-    foo = 3
-
+        
+        
 def signal_handler(signal, frame):
         print ('caught the ctrl-c')
         deinit()
@@ -157,7 +162,14 @@ if __name__ == '__main__':
     
     if (success is True):
         while(True):
-            time.sleep(10)
+            records = kreader.get_next_records()
+            
+            if len(records) > 0:
+                #process!
+                print records
+            else:                
+                time.sleep(k_idle_wait_period_to_poll_stream)
+                
     else:
         print ('Failed to initialize because we could not find a free shard.')
     
