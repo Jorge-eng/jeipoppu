@@ -24,11 +24,12 @@ sys.path.append('.')
 
 from DynamoDbPoller import DynamoDbPoller
 from KinesisStreamReader import KinesisStreamReader
-
+import AudioFeaturesProcessing
 k_config_section_amazon = 'amazon'
 k_config_section_server = 'server'
 
 k_config_item_region = 'region'
+k_config_item_kinesisstartpos = 'kinesis-start-position'
 k_config_item_kinesisstream = 'kinesis-stream'
 k_config_item_dynamodbtable = 'dynamodb-table'
 k_config_item_heartbeat_timeout = 'heartbeat-timeout'
@@ -40,7 +41,8 @@ k_key_shard = 'shard'
 k_key_time = 'time'
 k_key_owner = 'owner'
 
-k_idle_wait_period_to_poll_stream = 10
+
+k_idle_wait_period_to_poll_stream = 2
 
 # 1) Get your info, like host name, that uniquely identifies this instance
 #
@@ -75,9 +77,10 @@ class HeartbeatTimer(threading.Thread):
 
     def heartbeat(self):
         if (self.poller.update_heartbeat(self.shard)):
-            print ('heartbeat ' +  time.strftime("%c"))
+            #print ('heartbeat ' +  time.strftime("%c"))
+            foo = 3
         else:
-            print 'FAILBEAT'
+            print 'FAILED HEARTBEAT.  LOL wut?'
         
     def cancel(self):
         self.kill = True
@@ -98,10 +101,12 @@ def init(config_file_name):
     f.close()
     
     region = config.get(k_config_section_amazon, k_config_item_region)
+    kinesis_startpos = config.get(k_config_section_amazon, k_config_item_kinesisstartpos)
+
     kstream = config.get(k_config_section_amazon, k_config_item_kinesisstream)
     dynamotable = config.get(k_config_section_amazon, k_config_item_dynamodbtable)
-    heartbeat_timeout = float(config.get(k_config_section_server,k_config_item_heartbeat_timeout))
 
+    heartbeat_timeout = float(config.get(k_config_section_server,k_config_item_heartbeat_timeout))
     #get secret stuff
     access_key_id = os.getenv(k_env_name_for_amazon_id)
     secret_access_key = os.getenv(k_env_name_for_amazon_secret_key)
@@ -111,7 +116,7 @@ def init(config_file_name):
     
     #create poller
     dbpoller = DynamoDbPoller(region,dynamotable, access_key_id, secret_access_key, host_id, heartbeat_timeout)
-    kreader = KinesisStreamReader(region, kstream,access_key_id, secret_access_key)
+    kreader = KinesisStreamReader(region, kstream,access_key_id, secret_access_key, kinesis_startpos)
     
     
     kreader.init_connection()
@@ -125,7 +130,7 @@ def init(config_file_name):
     
     #set up heartbeat timer
     if myshard is not None:
-        print ('Claimed shard %s' % (myshard))
+        print ('Claimed %s' % (myshard))
       
         interval = heartbeat_timeout/2
         print ('starting heartbeat timer with interval of %d seconds' % (interval))
@@ -157,6 +162,8 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, signal_handler)
 
+    processor = AudioFeaturesProcessing.AudioFeaturesProcessingPool()
+
     config_file_name = sys.argv[1]
     success, kreader = init(config_file_name)
     
@@ -166,8 +173,9 @@ if __name__ == '__main__':
             
             if len(records) > 0:
                 #process!
-                print records
-            else:                
+                processor.set_records(records)
+                #print 'found %d records' % len(records)
+            else:
                 time.sleep(k_idle_wait_period_to_poll_stream)
                 
     else:

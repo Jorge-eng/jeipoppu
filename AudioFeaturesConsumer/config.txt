@@ -1,7 +1,20 @@
 [amazon]
+
+#the amazon region you are using
 region: us-east-1
+
+#latest,earliest  - where in kinises that you are starting from
+kinesis-start-position: latest
+
+#the string that is the name of the kinesis stream you are using
 kinesis-stream: audio_features
+
+#the name of the dynamo db table that you are using
 dynamodb-table: AudioFeaturesConsumer
 
+
+############################
 [server]
+
+#How many seconds have elapsed since the last heartbeat was seen to take over a shard
 heartbeat-timeout: 20
