@@ -80,7 +80,7 @@ class HeartbeatTimer(threading.Thread):
             #print ('heartbeat ' +  time.strftime("%c"))
             foo = 3
         else:
-            print 'FAILED HEARTBEAT.  LOL wut?'
+            print 'FAILED HEARTBEAT.'
         
     def cancel(self):
         self.kill = True
