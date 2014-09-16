@@ -2,6 +2,7 @@
 from boto import kinesis
 import sys
 import traceback
+import logging
 
 g_fake_shards = ['fakeshard01', 'fakeshard02', 'fakeshard03']
 
@@ -54,7 +55,7 @@ class KinesisStreamReader(object):
         except  Exception, e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-            print ''.join('!! ' + line for line in lines)  # Log it or whatever here
+            logging.warning(''.join('!! ' + line for line in lines))  
         
         return records
         

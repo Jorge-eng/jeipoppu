@@ -7,6 +7,7 @@ import traceback
 import time
 import binascii
 import multiprocessing
+import logging
 
 class AudioFeaturesProcessingPool():
     def __init__(self):
@@ -19,7 +20,7 @@ class AudioFeaturesProcessingPool():
             try:
                 message = matrix_pb2.MatrixClientMessage()
 
-                print record
+                #print record
                 b64data = record['Data']
                 message.ParseFromString(base64.b64decode(b64data))
                 mat = message.matrix_payload
@@ -28,7 +29,7 @@ class AudioFeaturesProcessingPool():
 
                 if mat is not None:
                     duration = mat.time2 - mat.time1
-                    print time.strftime("%X"), mac,  mat.id, mat.tags,mat.time1,duration
+                    logging.info('%s %s %s %s %d %d' % (time.strftime("%X"), mac,  mat.id, mat.tags,mat.time1,duration))
                     
             except Exception, e:
                 exc_type, exc_value, exc_traceback = sys.exc_info()

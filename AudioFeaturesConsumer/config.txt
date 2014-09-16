@@ -18,3 +18,12 @@ dynamodb-table: AudioFeaturesConsumer
 
 #How many seconds have elapsed since the last heartbeat was seen to take over a shard
 heartbeat-timeout: 20
+
+[client]
+log-file: log.txt
+
+#Possible values: DEBUG,INFO,WARNING,ERROR,CRITICAL
+log-level: INFO
+
+#True/False
+print-to-stdout: True

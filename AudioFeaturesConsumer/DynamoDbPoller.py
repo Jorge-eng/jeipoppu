@@ -11,6 +11,7 @@ import random
 import copy
 import time
 import random
+import logging
 k_default_local_port = 7777
 
 class DynamoDbPoller(object):
@@ -43,14 +44,14 @@ class DynamoDbPoller(object):
             return False
 
     def init_connection(self):
-        print ('Region: %s' % (self.region))
+        logging.info('Region: %s' % (self.region))
         
         if self.region == 'local':
-            print ('using 127.0.0.1')
+            logging.info('using 127.0.0.1')
             self.conn = DynamoDBConnection(host='127.0.0.1',port=k_default_local_port,is_secure=False)
             
             if not self.table_exists():
-                print 'Creating Table %s' % self.table 
+                logging.info( 'Creating Table %s' % self.table )
                 self.create_my_table()
                 
         else:
@@ -77,17 +78,17 @@ class DynamoDbPoller(object):
             host = str(myitem['host'])
 
             if host  != self.host_id:
-                print ('Another poller named %s replaced me (%s) for shard %s.  Oh the humanity (this was not expected).' %  (host,self.host_id, shard))
+                logging.warning('Another poller named %s replaced me (%s) for shard %s.  Oh the humanity (this was not expected).' %  (host,self.host_id, shard))
                 return False
             
             myitem['time'] = now
             if not myitem.save():
-                print ('someone took over me before I could save.  What the heck! (this was not expected)')
+                logging.warning ('someone took over me before I could save.  What the heck! (this was not expected)')
                 return False
             
             return True
         except ItemNotFound:
-            print ('can not find shard \"%s\"' % shard)
+            logging.critical ('can not find shard \"%s\"' % shard)
             return False
 
         
@@ -139,7 +140,7 @@ class DynamoDbPoller(object):
                 #if we got here, then victory
                 myshard = shard
 
-                print ('Shard %s did not exist yet... creating' % shard)
+                logging.warning ('Shard %s did not exist yet... creating' % shard)
                     
             except ConditionalCheckFailedException, e:
                 #argh, someone saved this item before me!  try another shard.
