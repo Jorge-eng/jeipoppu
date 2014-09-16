@@ -19,19 +19,25 @@ import signal
 import sys
 import time
 import datetime
+import logging 
 
 sys.path.append('.')
 
 from DynamoDbPoller import DynamoDbPoller
 from KinesisStreamReader import KinesisStreamReader
-
+import AudioFeaturesProcessing
 k_config_section_amazon = 'amazon'
 k_config_section_server = 'server'
+k_config_section_client = 'client'
 
 k_config_item_region = 'region'
+k_config_item_kinesisstartpos = 'kinesis-start-position'
 k_config_item_kinesisstream = 'kinesis-stream'
 k_config_item_dynamodbtable = 'dynamodb-table'
 k_config_item_heartbeat_timeout = 'heartbeat-timeout'
+k_config_item_logfile = 'log-file'
+k_config_item_loglevel = 'log-level'
+k_config_item_printtostdout = 'print-to-stdout'
 
 k_env_name_for_amazon_id = 'AWS_ACCESS_KEY_ID'
 k_env_name_for_amazon_secret_key = 'AWS_SECRET_KEY'
@@ -39,6 +45,9 @@ k_env_name_for_amazon_secret_key = 'AWS_SECRET_KEY'
 k_key_shard = 'shard'
 k_key_time = 'time'
 k_key_owner = 'owner'
+
+
+k_idle_wait_period_to_poll_stream = 2
 
 # 1) Get your info, like host name, that uniquely identifies this instance
 #
@@ -73,9 +82,10 @@ class HeartbeatTimer(threading.Thread):
 
     def heartbeat(self):
         if (self.poller.update_heartbeat(self.shard)):
-            print ('heartbeat ' +  time.strftime("%c"))
+            logging.info('heartbeat')
+            foo = 3
         else:
-            print 'FAILBEAT'
+            logging.warning('FAILED HEARTBEAT')
         
     def cancel(self):
         self.kill = True
@@ -85,10 +95,12 @@ class HeartbeatTimer(threading.Thread):
             time.sleep(self.heartbeat_period)
             self.heartbeat()
             
-        print ('Succesful thread shutdown')
+        logging.info('Succesful thread shutdown')
             
 def init(config_file_name):
     global g_timer
+    
+    
     #read config file
     config = ConfigParser.ConfigParser()
     f = open(config_file_name)
@@ -96,9 +108,15 @@ def init(config_file_name):
     f.close()
     
     region = config.get(k_config_section_amazon, k_config_item_region)
+    kinesis_startpos = config.get(k_config_section_amazon, k_config_item_kinesisstartpos)
+
     kstream = config.get(k_config_section_amazon, k_config_item_kinesisstream)
     dynamotable = config.get(k_config_section_amazon, k_config_item_dynamodbtable)
+
     heartbeat_timeout = float(config.get(k_config_section_server,k_config_item_heartbeat_timeout))
+    logfilename = config.get(k_config_section_client, k_config_item_logfile)
+    loglevel = config.get(k_config_section_client, k_config_item_loglevel)
+    printout = config.get(k_config_section_client, k_config_item_printtostdout)
 
     #get secret stuff
     access_key_id = os.getenv(k_env_name_for_amazon_id)
@@ -109,8 +127,22 @@ def init(config_file_name):
     
     #create poller
     dbpoller = DynamoDbPoller(region,dynamotable, access_key_id, secret_access_key, host_id, heartbeat_timeout)
-    kreader = KinesisStreamReader(region, kstream,access_key_id, secret_access_key)
+    kreader = KinesisStreamReader(region, kstream,access_key_id, secret_access_key, kinesis_startpos)
     
+    
+    #set up logging
+    logging.basicConfig(filename=logfilename,level=loglevel, 
+                        format='%(levelname)s %(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+                        
+                        
+    if printout:
+        root = logging.getLogger()
+        ch = logging.StreamHandler(sys.stdout)
+        ch.setLevel(loglevel)
+        formatter = logging.Formatter('%(levelname)s %(asctime)s %(message)s')
+        ch.setFormatter(formatter)
+        root.addHandler(ch)
+
     
     kreader.init_connection()
     dbpoller.init_connection()
@@ -123,15 +155,18 @@ def init(config_file_name):
     
     #set up heartbeat timer
     if myshard is not None:
-        print ('Claimed shard %s' % (myshard))
+        logging.info ('Claimed %s' % (myshard))
       
         interval = heartbeat_timeout/2
-        print ('starting heartbeat timer with interval of %d seconds' % (interval))
+        logging.info ('starting heartbeat timer with interval of %d seconds' % (interval))
         
         g_timer = HeartbeatTimer(dbpoller, myshard, interval)
+        g_timer.setDaemon(True)
         g_timer.start()
 
         success = True
+        
+        kreader.set_shard(myshard)
     
     return (success, kreader)
     
@@ -141,10 +176,10 @@ def deinit():
     if g_timer is not None:
         g_timer.cancel()
         
-    foo = 3
-
+        
+        
 def signal_handler(signal, frame):
-        print ('caught the ctrl-c')
+        logging.info ('caught the ctrl-c')
         deinit()
         sys.exit(0)
 
@@ -152,13 +187,23 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, signal_handler)
 
+    processor = AudioFeaturesProcessing.AudioFeaturesProcessingPool()
+
     config_file_name = sys.argv[1]
     success, kreader = init(config_file_name)
     
     if (success is True):
         while(True):
-            time.sleep(10)
+            records = kreader.get_next_records()
+            
+            if len(records) > 0:
+                #process!
+                processor.set_records(records)
+                #print 'found %d records' % len(records)
+            else:
+                time.sleep(k_idle_wait_period_to_poll_stream)
+                
     else:
-        print ('Failed to initialize because we could not find a free shard.')
+        logging.critical ('Failed to initialize because we could not find a free shard.')
     
     
