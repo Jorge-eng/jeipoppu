@@ -26,6 +26,11 @@ sys.path.append('.')
 from DynamoDbPoller import DynamoDbPoller
 from KinesisStreamReader import KinesisStreamReader
 import AudioFeaturesProcessing
+
+k_number_of_records_consumed_before_updating_dbpoller = 100
+k_record_limit_per_pull = 100
+k_app_id = 'AudioFeaturesConsumer'
+
 k_config_section_amazon = 'amazon'
 k_config_section_server = 'server'
 k_config_section_client = 'client'
@@ -126,7 +131,7 @@ def init(config_file_name):
     host_id = socket.gethostname()
     
     #create poller
-    dbpoller = DynamoDbPoller(region,dynamotable, access_key_id, secret_access_key, host_id, heartbeat_timeout)
+    dbpoller = DynamoDbPoller(region,dynamotable, access_key_id, secret_access_key, host_id, heartbeat_timeout, k_app_id)
     kreader = KinesisStreamReader(region, kstream,access_key_id, secret_access_key, kinesis_startpos)
     
     
@@ -149,13 +154,13 @@ def init(config_file_name):
     
     shard_ids = kreader.get_shard_ids()
     
-    myshard = dbpoller.claim_first_available_shard(shard_ids)
+    myshard, last_sequence_number = dbpoller.claim_first_available_shard(shard_ids)
 
     success = False
     
     #set up heartbeat timer
     if myshard is not None:
-        logging.info ('Claimed %s' % (myshard))
+        logging.info ('Claimed %s' % (myshard + '-' + k_app_id))
       
         interval = heartbeat_timeout/2
         logging.info ('starting heartbeat timer with interval of %d seconds' % (interval))
@@ -167,8 +172,9 @@ def init(config_file_name):
         success = True
         
         kreader.set_shard(myshard)
+        kreader.set_last_sequence_number(last_sequence_number)
     
-    return (success, kreader)
+    return (success, kreader, dbpoller)
     
 def deinit():
     global g_timer
@@ -190,16 +196,29 @@ if __name__ == '__main__':
     processor = AudioFeaturesProcessing.AudioFeaturesProcessingPool()
 
     config_file_name = sys.argv[1]
-    success, kreader = init(config_file_name)
+    success, kreader, dbpoller = init(config_file_name)
     
     if (success is True):
+        
+        records_consumed = 0
+
         while(True):
-            records = kreader.get_next_records()
+            records = kreader.get_next_records(record_limit=k_record_limit_per_pull)
             
             if len(records) > 0:
                 #process!
                 processor.set_records(records)
-                #print 'found %d records' % len(records)
+                
+                records_consumed += len(records)
+                
+                #if we have exceeded the number of records required to update our sequence number, we do so
+                if (records_consumed > k_number_of_records_consumed_before_updating_dbpoller):
+                    sequence_number = records[-1]['SequenceNumber']
+                    dbpoller.update_shard_sequence_number(sequence_number)
+                    records_consumed = 0
+                    
+                    logging.info('update %s sequence number to %s' %(dbpoller.myshard,sequence_number))
+
             else:
                 time.sleep(k_idle_wait_period_to_poll_stream)
                 

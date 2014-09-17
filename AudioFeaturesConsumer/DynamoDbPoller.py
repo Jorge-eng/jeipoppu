@@ -12,16 +12,23 @@ import copy
 import time
 import random
 import logging
+
+
 k_default_local_port = 7777
 
+k_dynamodb_last_sequence_number = 'last_sequence_number'
+
+
 class DynamoDbPoller(object):
-    def __init__(self, region, table, aws_id, aws_key, host_id, heartbeat_timeout):
+    def __init__(self, region, table, aws_id, aws_key, host_id, heartbeat_timeout, app_id):
         self.region = region
         self.table = table
         self.aws_id = aws_id
         self.aws_key = aws_key
         self.host_id = host_id
         self.heartbeat_timeout = heartbeat_timeout
+        self.myshard = None
+        self.app_id = app_id
         
         random.seed(hash(time.time()) + hash(host_id))
      
@@ -71,14 +78,16 @@ class DynamoDbPoller(object):
     def update_heartbeat(self, shard):
         table = self.get_table()
         
+        shard_id = self.myshard + "-" + self.app_id
+
         try:
-            myitem = table.get_item(id=shard)
+            myitem = table.get_item(id=shard_id)
         
             now = int(time.time())
             host = str(myitem['host'])
 
             if host  != self.host_id:
-                logging.warning('Another poller named %s replaced me (%s) for shard %s.  Oh the humanity (this was not expected).' %  (host,self.host_id, shard))
+                logging.warning('Another poller named %s replaced me (%s) for shard %s.  Oh the humanity (this was not expected).' %  (host,self.host_id, shard_id))
                 return False
             
             myitem['time'] = now
@@ -88,10 +97,27 @@ class DynamoDbPoller(object):
             
             return True
         except ItemNotFound:
-            logging.critical ('can not find shard \"%s\"' % shard)
+            logging.critical ('can not find %s, so I am not updating the heartbeat' % shard_id)
             return False
 
-        
+    def update_shard_sequence_number(self, sequence_number):
+        if self.myshard is not None:
+            table = self.get_table()
+            
+            shard_id = self.myshard + "-" + self.app_id
+
+            try:
+                myitem = table.get_item(id=shard_id)
+                myitem[k_dynamodb_last_sequence_number] = sequence_number
+                
+                if not myitem.save():
+                    logging.warning('Someone saved to shard %s before I (%s) could' % (shard_id, self.host_id) )
+                    
+    
+            except ItemNotFound, e:
+            #gah! This shard tracking item does not exist yet.  
+                logging.warning('Unable to update %s in DynamoDB with new sequence number' % shard_id)
+
     #returns id of claimed shard
     def claim_first_available_shard(self, shard_ids):     
         #randomize order of shards
@@ -101,16 +127,18 @@ class DynamoDbPoller(object):
         myshard = None
         for shard in shards:
             
-            myshard = self.claim_shard_if_expired(shard) 
+            myshard, last_sequence_number = self.claim_shard_if_expired(shard) 
             
             if myshard is not None:
+                self.myshard = myshard
                 break;
                 
-        return myshard
+        return (myshard, last_sequence_number)
         
 
     def claim_shard_if_expired(self, shard):
         myshard = None
+        last_sequence_number = None
         
          #get table
         table = self.get_table()
@@ -120,8 +148,10 @@ class DynamoDbPoller(object):
         cutoff_time = now - self.heartbeat_timeout
         
         #query for items to see if they exist already
+        shard_id = shard + "-" + self.app_id
+        
         try:
-            myitem = table.get_item(id=shard)
+            myitem = table.get_item(id=shard_id)
             savedtime = myitem['time']
             host = myitem['host']
             if savedtime < cutoff_time:
@@ -131,19 +161,20 @@ class DynamoDbPoller(object):
                     
                 if myitem.save():
                     myshard = shard
+                    last_sequence_number = myitem[k_dynamodb_last_sequence_number]
                     
         except ItemNotFound, e:
             #gah! This shard tracking item does not exist yet.  Got put in a new one
-            newitem = Item(table,data={'id':shard,'time':now, 'host':self.host_id})
+            newitem = Item(table,data={'id':shard_id,'time':now, 'host':self.host_id})
             try:
                 newitem.save()
                 #if we got here, then victory
                 myshard = shard
 
-                logging.warning ('Shard %s did not exist yet... creating' % shard)
+                logging.warning ('Shard %s did not exist yet... creating' % shard_id)
                     
             except ConditionalCheckFailedException, e:
                 #argh, someone saved this item before me!  try another shard.
                 foo = 3
                     
-        return myshard
+        return (myshard, last_sequence_number)

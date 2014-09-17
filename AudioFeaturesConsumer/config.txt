@@ -3,8 +3,8 @@
 #the amazon region you are using
 region: us-east-1
 
-#latest,earliest  - where in kinises that you are starting from
-kinesis-start-position: latest
+#latest,earliest,resume  - where in kinesis that you are starting from
+kinesis-start-position: resume
 
 #the string that is the name of the kinesis stream you are using
 kinesis-stream: audio_features

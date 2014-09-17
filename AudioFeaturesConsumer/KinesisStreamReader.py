@@ -8,6 +8,7 @@ g_fake_shards = ['fakeshard01', 'fakeshard02', 'fakeshard03']
 
 k_start_pos_latest = 'latest'
 k_start_pos_earliest = 'earliest'
+k_start_pos_resume = 'resume'
 
 
 class KinesisStreamReader(object):
@@ -19,6 +20,8 @@ class KinesisStreamReader(object):
         self.auth = {'aws_access_key_id':self.aws_id,'aws_secret_access_key' : self.aws_key }
         self.next_iterator = None
         self.start_pos = start_pos
+        self.last_sequence_number = None
+        self.myshard = None
         
     def reset_position_to_horizon(self):
         self.next_iterator = None
@@ -33,16 +36,31 @@ class KinesisStreamReader(object):
     def set_shard(self, shard):
         self.myshard = shard
         
+    def set_last_sequence_number(self, last_sequence_number):
+        self.last_sequence_number = last_sequence_number
+        
     def get_next_records(self,record_limit = None):
+        sequence_number = None
         if self.next_iterator is None:
             if self.start_pos == k_start_pos_latest:
                 iterator_type = 'LATEST'
+                logging.info('Using latest shard iterator')
             elif self.start_pos == k_start_pos_earliest:
                 iterator_type = 'TRIM_HORIZON'
+                logging.info('Using earliest shard iterator')
+            elif self.start_pos == k_start_pos_resume:
+                if self.last_sequence_number is None:
+                    iterator_type = 'LATEST'
+                    logging.warning('No sequence number to resume from was found... just using latest shard iterator.  Sorry')
+                else:
+                    sequence_number = self.last_sequence_number
+                    iterator_type = 'AFTER_SEQUENCE_NUMBER'
+                    logging.info('Using resumed shard iterator %s' % sequence_number)
+
             else:
                 raise NameError('%s was an unrecognized Kinesis start position' % self.start_pos)
                 
-            response = self.conn.get_shard_iterator(self.stream,self.myshard,iterator_type)
+            response = self.conn.get_shard_iterator(self.stream,self.myshard,iterator_type, sequence_number)
             self.next_iterator = response['ShardIterator']
         
         records = []
