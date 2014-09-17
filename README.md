@@ -22,14 +22,17 @@ Kinesis stream is divided into shards, each shard should have one processor of a
 
 STREAM
                               
-stream ---> shard1<br/>
-       ---> shard2<br/>           
+stream <br/>
+&nbsp;&nbsp;&nbsp;---> shard1<br/>
+&nbsp;&nbsp;&nbsp;---> shard2<br/>           
 <br/>
- shard1 ---> bark processor, node1<br/>
-        ---> snore processor, node2<br/>
+ shard1 <br/>
+&nbsp;&nbsp;&nbsp;---> bark processor, node1<br/>
+&nbsp;&nbsp;&nbsp; ---> snore processor, node2<br/>
 
- shard2 ---> bark processor, node3<br/>
-        ---> snore processor, node4<br/>
+ shard2 <br/>
+&nbsp;&nbsp;&nbsp;---> bark processor, node3<br/>
+&nbsp;&nbsp;&nbsp;---> snore processor, node4<br/>
 <br/>
 
 
