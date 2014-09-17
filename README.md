@@ -22,14 +22,16 @@ Kinesis stream is divided into shards, each shard should have one processor of a
 
 STREAM
                               
-stream ---> shard1
-       ---> shard2           
+stream ---> shard1<br/>
+       ---> shard2<br/>           
+<br/>
+ shard1 ---> bark processor, node1<br/>
+        ---> snore processor, node2<br/>
 
- shard1 ---> bark processor, node1
-        ---> snore processor, node2
+ shard2 ---> bark processor, node3<br/>
+        ---> snore processor, node4<br/>
+<br/>
 
- shard2 ---> bark processor, node3
-        ---> snore processor, node4
 
 -There is a configuration file which will determine what happens in the processor. 
 -For example, what processor is used, logging options, which Amazon region, etc.
