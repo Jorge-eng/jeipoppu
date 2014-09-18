@@ -27,3 +27,7 @@ log-level: INFO
 
 #True/False
 print-to-stdout: True
+
+classifier: pca-gmm
+classifier-key: latest_audio_feats_gmm
+classifier-bucker: hello-machine-learning-something
