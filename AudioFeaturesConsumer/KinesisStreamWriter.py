@@ -1,6 +1,8 @@
 #!/usr/bin/python
 from boto import kinesis
 import logging
+import sys
+import traceback
 
 class KinesisStreamWriter():
     def __init__(self, region, stream, aws_id, aws_key): 
@@ -17,7 +19,7 @@ class KinesisStreamWriter():
     
     def put_item(self, data, partition_key):
         try:
-            self.conn.put_record(self.stream, data, partition_key, b64_encode=True)
+            self.conn.put_record(self.stream, data, partition_key, b64_encode=False)
         except  Exception, e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
