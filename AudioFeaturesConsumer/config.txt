@@ -7,10 +7,14 @@ region: us-east-1
 kinesis-start-position: resume
 
 #the string that is the name of the kinesis stream you are using
-kinesis-stream: audio_features
+kinesis-read-stream: audio_features
+kinesis-write-stream: audio_products
 
 #the name of the dynamo db table that you are using
 dynamodb-table: AudioFeaturesConsumer
+
+s3-classifier-key: latest_audio_feats_gmm
+s3-classifier-bucket: hello-machine-learning-classifiers
 
 
 ############################
@@ -28,6 +32,8 @@ log-level: INFO
 #True/False
 print-to-stdout: True
 
-classifier: pca-gmm
-classifier-key: latest_audio_feats_gmm
-classifier-bucker: hello-machine-learning-something
+#classifier-id: pca-gmm
+classifier-id: CLASSIFIER_PASS_THROUGH
+
+app-id: AudioFeaturesConsumerLocal
+num-processes: 2

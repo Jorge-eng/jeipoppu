@@ -25,24 +25,32 @@ sys.path.append('.')
 
 from DynamoDbPoller import DynamoDbPoller
 from KinesisStreamReader import KinesisStreamReader
+from KinesisStreamWriter import KinesisStreamWriter
+from S3BucketReader import S3BucketReader
 import AudioFeaturesProcessing
 
 k_number_of_records_consumed_before_updating_dbpoller = 100
 k_record_limit_per_pull = 100
-k_app_id = 'AudioFeaturesConsumer'
+k_idle_wait_period_to_poll_stream = 2
 
 k_config_section_amazon = 'amazon'
 k_config_section_server = 'server'
 k_config_section_client = 'client'
 
+k_config_item_appid = 'app-id'
 k_config_item_region = 'region'
 k_config_item_kinesisstartpos = 'kinesis-start-position'
-k_config_item_kinesisstream = 'kinesis-stream'
+k_config_item_readkinesisstream = 'kinesis-read-stream'
+k_config_item_writekinesisstream = 'kinesis-write-stream'
 k_config_item_dynamodbtable = 'dynamodb-table'
 k_config_item_heartbeat_timeout = 'heartbeat-timeout'
 k_config_item_logfile = 'log-file'
 k_config_item_loglevel = 'log-level'
 k_config_item_printtostdout = 'print-to-stdout'
+k_config_item_classifierid = 'classifier-id'
+k_config_item_s3classifierkey = 's3-classifier-key'
+k_config_item_s3classifierbucket = 's3-classifier-bucket'
+k_config_item_numprocesses = 'num-processes'
 
 k_env_name_for_amazon_id = 'AWS_ACCESS_KEY_ID'
 k_env_name_for_amazon_secret_key = 'AWS_SECRET_KEY'
@@ -52,7 +60,6 @@ k_key_time = 'time'
 k_key_owner = 'owner'
 
 
-k_idle_wait_period_to_poll_stream = 2
 
 # 1) Get your info, like host name, that uniquely identifies this instance
 #
@@ -115,14 +122,23 @@ def init(config_file_name):
     region = config.get(k_config_section_amazon, k_config_item_region)
     kinesis_startpos = config.get(k_config_section_amazon, k_config_item_kinesisstartpos)
 
-    kstream = config.get(k_config_section_amazon, k_config_item_kinesisstream)
+    stream_to_read = config.get(k_config_section_amazon, k_config_item_readkinesisstream)
+    stream_to_write = config.get(k_config_section_amazon, k_config_item_writekinesisstream)
     dynamotable = config.get(k_config_section_amazon, k_config_item_dynamodbtable)
 
     heartbeat_timeout = float(config.get(k_config_section_server,k_config_item_heartbeat_timeout))
     logfilename = config.get(k_config_section_client, k_config_item_logfile)
     loglevel = config.get(k_config_section_client, k_config_item_loglevel)
     printout = config.get(k_config_section_client, k_config_item_printtostdout)
+    
+    classifier_id = config.get(k_config_section_client, k_config_item_classifierid)
+    classifier_s3_key = config.get(k_config_section_amazon, k_config_item_s3classifierkey)
+    classifier_s3_bucket = config.get(k_config_section_amazon, k_config_item_s3classifierbucket)
 
+    app_id = config.get(k_config_section_client, k_config_item_appid)
+    numproc = config.get(k_config_section_client, k_config_item_numprocesses)
+    numproc = int(numproc)
+    
     #get secret stuff
     access_key_id = os.getenv(k_env_name_for_amazon_id)
     secret_access_key = os.getenv(k_env_name_for_amazon_secret_key)
@@ -131,15 +147,18 @@ def init(config_file_name):
     host_id = socket.gethostname()
     
     #create poller
-    dbpoller = DynamoDbPoller(region,dynamotable, access_key_id, secret_access_key, host_id, heartbeat_timeout, k_app_id)
-    kreader = KinesisStreamReader(region, kstream,access_key_id, secret_access_key, kinesis_startpos)
+    dbpoller = DynamoDbPoller(region,dynamotable, access_key_id, secret_access_key, host_id, heartbeat_timeout, app_id)
     
-    
+    #set up kinesis reader so we can find out which shards exist
+    kreader = KinesisStreamReader(region, stream_to_read,access_key_id, secret_access_key, kinesis_startpos)
+    kreader.init_connection()
+
     #set up logging
     logging.basicConfig(filename=logfilename,level=loglevel, 
                         format='%(levelname)s %(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
                         
-                        
+         
+    #if we have been configured to also log to std out, do so
     if printout:
         root = logging.getLogger()
         ch = logging.StreamHandler(sys.stdout)
@@ -149,19 +168,25 @@ def init(config_file_name):
         root.addHandler(ch)
 
     
-    kreader.init_connection()
+    #initialize dynamoDB connection
     dbpoller.init_connection()
     
+    #figure out which shard I am using
     shard_ids = kreader.get_shard_ids()
-    
     myshard, last_sequence_number = dbpoller.claim_first_available_shard(shard_ids)
 
     success = False
-    
-    #set up heartbeat timer
+    processor = None
+
+    #if successful in getting a shard, set up everything else
     if myshard is not None:
-        logging.info ('Claimed %s' % (myshard + '-' + k_app_id))
-      
+        logging.info ('Claimed %s' % (myshard + '-' + app_id))
+
+        #our writer to another kinesis stream
+        kwriter = KinesisStreamWriter(region, stream_to_write, access_key_id, secret_access_key)
+        kwriter.init_connection()
+        
+        #set up heartbeat
         interval = heartbeat_timeout/2
         logging.info ('starting heartbeat timer with interval of %d seconds' % (interval))
         
@@ -169,12 +194,30 @@ def init(config_file_name):
         g_timer.setDaemon(True)
         g_timer.start()
 
-        success = True
-        
         kreader.set_shard(myshard)
         kreader.set_last_sequence_number(last_sequence_number)
-    
-    return (success, kreader, dbpoller)
+        
+        #if we can get data from amazon for our classifier....
+        s3reader = S3BucketReader(region, classifier_s3_bucket, access_key_id, secret_access_key).init_connection()
+        
+        if s3reader.conn is not None:
+            classifier_data = s3reader.get_linked_value(classifier_s3_key)
+            
+            #set up processor
+            processor = AudioFeaturesProcessing.AudioFeaturesProcessingThread(classifier_id, classifier_data, numproc, kwriter)
+            
+            if processor.has_classifier():
+                processor.setDaemon(True)
+                processor.start()
+                success = True
+           
+    if (success):
+        logging.info('Reading from stream %s' % (stream_to_read))
+        logging.info('Writing to stream %s' % (stream_to_write))
+
+        
+        
+    return (success, kreader,processor, dbpoller)
     
 def deinit():
     global g_timer
@@ -193,21 +236,25 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    processor = AudioFeaturesProcessing.AudioFeaturesProcessingPool()
 
     config_file_name = sys.argv[1]
-    success, kreader, dbpoller = init(config_file_name)
+    success, kreader, processor, dbpoller = init(config_file_name)
+    
     
     if (success is True):
         
         records_consumed = 0
 
+        ###### MAIN PROGRAM LOOP ######
         while(True):
+            #get the records from kinesis
             records = kreader.get_next_records(record_limit=k_record_limit_per_pull)
-            
+                        
+            #did we get any?
             if len(records) > 0:
+                
                 #process!
-                processor.set_records(records)
+                processor.put(records)
                 
                 records_consumed += len(records)
                 
