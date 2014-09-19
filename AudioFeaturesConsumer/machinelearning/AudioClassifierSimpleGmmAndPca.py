@@ -9,11 +9,9 @@ import copy
 import json
 import numpy as np
 
-sys.path.append('../proto')
-sys.path.append('./machinelearning')
 
-import matrix_pb2
-import classifer_pb2
+from proto import matrix_pb2
+from proto import classifer_pb2
 
 from MyPca import MyPca
 from MyGmm import MyGmmEnsemble

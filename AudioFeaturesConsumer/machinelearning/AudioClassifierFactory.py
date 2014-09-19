@@ -1,12 +1,5 @@
 import sys
 
-
-sys.path.append('../proto')
-sys.path.append('./machinelearning')
-
-import matrix_pb2
-import classifer_pb2
-
 from PassThroughClassifier import PassThroughClassifier
 from AudioClassifierSimpleGmmAndPca import GmmAndPcaClassifier
 

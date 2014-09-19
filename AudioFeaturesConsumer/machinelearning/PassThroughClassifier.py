@@ -6,11 +6,8 @@ import logging
 import time
 import copy
 
-sys.path.append('../proto')
-sys.path.append('./machinelearning')
-
-import matrix_pb2
-import classifer_pb2
+from proto import matrix_pb2
+from proto import classifer_pb2
 
 def matrix_message_to_class_message(message):
     mat = message.matrix_payload

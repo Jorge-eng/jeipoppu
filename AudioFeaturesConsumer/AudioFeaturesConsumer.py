@@ -21,7 +21,7 @@ import time
 import datetime
 import logging 
 
-sys.path.append('.')
+sys.path.append('../')
 
 from DynamoDbPoller import DynamoDbPoller
 from KinesisStreamReader import KinesisStreamReader

@@ -8,10 +8,7 @@ import traceback
 from Queue import Queue
 from multiprocessing import Pool
 
-sys.path.append('.')
-sys.path.append('./machinelearning')
-
-import AudioClassifierFactory
+from machinelearning import AudioClassifierFactory
 
 
 class AudioFeaturesProcessingThread(threading.Thread):
