@@ -1,38 +1,82 @@
 #!/usr/bin/python
 #
-import base64
-import matrix_pb2
 import sys
-import traceback
 import time
-import binascii
-import multiprocessing
 import logging
+import threading
+import traceback
+from Queue import Queue
+from multiprocessing import Pool
 
-class AudioFeaturesProcessingPool():
-    def __init__(self):
-        foo = 3
+from machinelearning import AudioClassifierFactory
+
+
+class AudioFeaturesProcessingThread(threading.Thread):
+    def __init__(self, classifier_id, classifier_data, numprocs, writer):
+        #set up thread
+        threading.Thread.__init__(self)
+        self.queue = Queue()
+        self.writer = writer
+
+        #get classifier function object -- will output classification as a protobuf serialized message
+        self.classifier = AudioClassifierFactory.get(classifier_id, classifier_data)
         
-        
-    def set_records(self, records):
-      
-        for record in records:
-            try:
-                message = matrix_pb2.MatrixClientMessage()
-
-                #print record
-                b64data = record['Data']
-                message.ParseFromString(base64.b64decode(b64data))
-                mat = message.matrix_payload
-                
-                mac = binascii.hexlify(message.mac)
-
-                if mat is not None:
-                    duration = mat.time2 - mat.time1
-                    logging.info('%s %s %s %s %d %d' % (time.strftime("%X"), mac,  mat.id, mat.tags,mat.time1,duration))
-                    
-            except Exception, e:
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-                print ''.join('!! ' + line for line in lines)  # Log it or whatever here
+        if self.classifier is None:
+            logging.critical('could not find the classifier %s in our factory' % classifier)
+            raise Exception('could not find classifier %s' % classifier)
+        else:
+            logging.info('Found classifier %s in the factory!' % classifier_id)
             
+        #create processing pool 
+        logging.info('Starting processing pool with %d processes' % (numprocs))
+        self.pool = Pool(numprocs)
+
+    def has_classifier(self):
+        if self.classifier is not None:
+            return True
+        else:
+            return False
+        
+    #exit the thread
+    def cancel(self):
+        self.queue.put(None)
+        
+    #put Kinesis records into the queue, where it will get processed    
+    def put(self, records):
+      
+        if records is not None:
+            self.queue.put(records)
+      
+ 
+    def run(self):
+        logging.info('AudioFeatureProcessingThread is running!')
+        
+        while True:
+            #block until records arrive
+            records = self.queue.get()
+                        
+            if records is None:
+                logging.warning("exiting AudioFeaturesProcessingThread")
+                break;
+            
+            #process records with classifier
+            t1 = time.time()
+            messages = self.pool.map(self.classifier, records)
+            t2 = time.time()
+            
+            #THIS COULD BE A BOTTLENECK, PUTTING THEM IN ONE AT A TIME
+            t3 = time.time()
+
+            if messages is not None:
+                for item in messages:
+                    if item is not None:
+                        message = item[0]
+                        partition = item[1]
+                        
+                        self.writer.put_item(message, partition)
+                    
+            t4 = time.time()
+            
+            logging.info('AudioFeaturesProcessingThread: %f seconds to process %d items, %f seconds to send' % (t2-t1, len(records), t4-t3) )
+
+            self.queue.task_done()
