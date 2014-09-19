@@ -35,7 +35,7 @@ def matrix_message_to_class_message(message):
     return (classifier_message, mac)
     
 #functor example
-class PassThroughClassifier():
+class PassThroughClassifier(object):
     def __init__(self, data):
         self.data = data
         

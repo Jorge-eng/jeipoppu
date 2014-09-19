@@ -7,7 +7,7 @@ import logging
 import sys
 import traceback
 
-class S3BucketReader():
+class S3BucketReader(object):
     def __init__(self, region, bucket_id,  aws_id, aws_key):
         self.region = region
         self.aws_id = aws_id
@@ -21,6 +21,7 @@ class S3BucketReader():
         
         if self.conn is None:
             logging.critical('Unable to establish connection to S3!')
+            raise Exception('Unable to establish connection to S3')
 
         self.bucket = self.bucket_id
         

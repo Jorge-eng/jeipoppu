@@ -23,6 +23,7 @@ class AudioFeaturesProcessingThread(threading.Thread):
         
         if self.classifier is None:
             logging.critical('could not find the classifier %s in our factory' % classifier)
+            raise Exception('could not find classifier %s' % classifier)
         else:
             logging.info('Found classifier %s in the factory!' % classifier_id)
             
@@ -50,12 +51,12 @@ class AudioFeaturesProcessingThread(threading.Thread):
     def run(self):
         logging.info('AudioFeatureProcessingThread is running!')
         
-        while (True):
+        while True:
             #block until records arrive
             records = self.queue.get()
                         
             if records is None:
-                Logging.warning("exiting AudioFeaturesProcessingThread")
+                logging.warning("exiting AudioFeaturesProcessingThread")
                 break;
             
             #process records with classifier

@@ -4,71 +4,71 @@ import numpy.linalg
 import scipy.linalg
 
 
-class MyGmm():
+class MyGmm(object):
     def init(self):
-        self.L_ = []
-        self.LTInv_ = []
+        self.L = []
+        self.LTInv = []
         self.denom_ = []
         
-        logk2pi_ = -0.5 * np.log(np.pi * 2)*self.dim_
+        logk2pi_ = -0.5 * np.log(np.pi * 2)*self.dim
 
-        for i in range(self.nmodels_):
-            mat = np.matrix(self.covars_[i])
+        for i in range(self.nmodels):
+            mat = np.matrix(self.covars[i])
             mychol = scipy.linalg.cholesky(mat)
             mycholInverseTranspose = np.linalg.inv(mychol).transpose()
 
             #compute sqrt(det(covariance))
             k = 1;
-            for j in range(self.dim_):
+            for j in range(self.dim):
                 k = k * mychol[j, j]   
           
             self.denom_.append(-np.log(k) + logk2pi_)
             
-            self.L_.append(mychol)
-            self.LTInv_.append(mycholInverseTranspose)
+            self.L.append(mychol)
+            self.LTInv.append(mycholInverseTranspose)
         
         
 
         
-    def setFromSklearnGmm(self, g):
-        self.covars_ = g.covars_
-        self.means_ = g.means_
-        self.weights_ = g.weights_
-        self.dim_ = self.covars_.shape[1]
+    def set_from_sklearn_gmm(self, g):
+        self.covars = g.covars
+        self.means = g.means
+        self.weights = g.weights
+        self.dim = self.covars.shape[1]
         
-        if len(self.covars_[0].shape) == 1:     
+        if len(self.covars[0].shape) == 1:     
             cs = []
        
-            for j in range(len(self.covars_)):
-                cs.append(np.diag(self.covars_[j]))
+            for j in range(len(self.covars)):
+                cs.append(np.diag(self.covars[j]))
 
-            self.covars_ = [] 
+            self.covars = [] 
             for c in cs:
-                self.covars_.append(c)
+                self.covars.append(c)
 			
-            self.covars_ = np.array(self.covars_)
+            self.covars = np.array(self.covars)
             
-            self.nmodels_ = len(self.covars_)
+            self.nmodels = len(self.covars)
 
         else:
-            self.nmodels_ = self.covars_.shape[0]
+            self.nmodels = self.covars.shape[0]
         self.init()
         
-    def toDict(self):
+    def to_dict(self):
         me = {}
-        me['covars'] = self.covars_.tolist()
-        me['means'] = self.means_.tolist()
-        me['weights'] = self.weights_.tolist()
-        me['dim'] = self.dim_
-        me['nmodels'] = self.nmodels_
+        me['covars'] = self.covars.tolist()
+        me['means'] = self.means.tolist()
+        me['weights'] = self.weights.tolist()
+        me['dim'] = self.dim
+        me['nmodels'] = self.nmodels
         return me
         
-    def setFromDict(self, me):
-        self.covars_ = np.array(me['covars'])
-        self.means_ = np.array(me['means'])
-        self.weights_ = np.array(me['weights'])
-        self.dim_ = me['dim']
-        self.nmodels_ = me['nmodels']
+    def set_from_dict(self, me):
+        self.covars = np.array(me['covars'])
+        self.means = np.array(me['means'])
+        self.weights = np.array(me['weights'])
+        self.dim = me['dim']
+        self.nmodels = me['nmodels']
         self.init()
 
 
@@ -76,8 +76,8 @@ class MyGmm():
     def evaluate(self, x):
         logliksum = np.array([])
         first = True
-        for imodel in range(self.nmodels_):
-            loglik = self.evalgaussian(self.L_[imodel], self.LTInv_[imodel], self.weights_[imodel], self.means_[imodel], self.denom_[imodel], x)
+        for imodel in range(self.nmodels):
+            loglik = self.evalgaussian(self.L[imodel], self.LTInv[imodel], self.weights[imodel], self.means[imodel], self.denom_[imodel], x)
 
             if first:
                 logliksum = loglik
@@ -110,31 +110,31 @@ class MyGmm():
 
 class MyGmmEnsemble():
     def __init__(self):
-        self.gmm_ = []
+        self.gmm = []
         
-    def addGmm(self, g):
-        self.gmm_ .append(g)
+    def add_gmm(self, g):
+        self.gmm .append(g)
         
-    def toDict(self):
+    def to_dict(self):
         me = []
-        for g in self.gmm_:
-            me.append(g.toDict())
+        for g in self.gmm:
+            me.append(g.to_dict())
         
         return me
         
-    def setFromDict(self, me):
+    def set_from_dict(self, me):
         
         for item in me:
             g = MyGmm()
-            g.setFromDict(item)
-            self.addGmm(g)
+            g.set_from_dict(item)
+            self.add_gmm(g)
             
     def evaluate(self, x, minmaxloglik = -20):
         max = 0.0
         
         #evaluate, possibly in batch
         first = True
-        for g in self.gmm_:
+        for g in self.gmm:
             if first:
                 y = g.evaluate(x)
                 first = False
@@ -159,31 +159,3 @@ class MyGmmEnsemble():
         return probs
         
 
-if __name__ == '__main__':
-    #test
-    data = {"dim": 3, "covars": 
-        [[[1, 0.1, 0.2], 
-            [0.1, 1, 0.3], 
-             [0.2, 0.3, 1]]], 
-    "nmodels": 1, "weights": [1.0000000000000002], 
-    "means": [[0.1, 0.2, 0.3]]}
-
-    g = MyGmm()
-    g.setFromDict(data)
-    
-    x = np.array([0.1, 0.2, 0.3])
-    x = x.reshape((1, 3))
-    print g.evaluate(x) + 2.6883 
-    
-    x = np.array([0.0, 0.15, 0.5])
-    x = x.reshape((1, 3))
-
-    print g.evaluate(x) + 2.7245
-    
-    me = g.toDict()
-    g = MyGmm()
-    g.setFromDict(me)
-    print g.evaluate(x) + 2.7245
-
-
-    

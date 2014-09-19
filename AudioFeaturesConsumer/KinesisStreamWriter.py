@@ -4,7 +4,7 @@ import logging
 import sys
 import traceback
 
-class KinesisStreamWriter():
+class KinesisStreamWriter(object):
     def __init__(self, region, stream, aws_id, aws_key): 
         self.region = region
         self.stream = stream

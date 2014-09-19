@@ -217,7 +217,7 @@ def init(config_file_name):
                 processor.start()
                 success = True
            
-    if (success):
+    if success is True:
         logging.info('Reading from stream %s' % (stream_to_read))
         logging.info('Writing to stream %s' % (stream_to_write))
 
@@ -247,12 +247,12 @@ if __name__ == '__main__':
     success, kreader, processor, dbpoller = init(config_file_name)
     
     
-    if (success is True):
+    if success is True:
         
         records_consumed = 0
 
         ###### MAIN PROGRAM LOOP ######
-        while(True):
+        while True:
             #get the records from kinesis
             records = kreader.get_next_records(record_limit=k_record_limit_per_pull)
                         

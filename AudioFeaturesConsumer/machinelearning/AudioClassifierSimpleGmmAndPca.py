@@ -70,8 +70,8 @@ class GmmAndPcaClassifier():
         
         classifier_dict = json.loads(self.data['serialized_data'])
         
-        self.pca.setFromDict(classifier_dict['pca'])
-        self.gmm.setFromDict(classifier_dict['gmmsensemble'])
+        self.pca.set_from_dict(classifier_dict['pca'])
+        self.gmm.set_from_dict(classifier_dict['gmmsensemble'])
     
     def evaluate(self, mat):
         
