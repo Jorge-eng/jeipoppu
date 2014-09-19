@@ -33,7 +33,8 @@ log-level: INFO
 print-to-stdout: True
 
 #classifier-id: pca-gmm
-classifier-id: CLASSIFIER_PASS_THROUGH
+#classifier-id: CLASSIFIER_PASS_THROUGH
+classifier-id: CLASSIFIER_GMM_PCA
 
 app-id: AudioFeaturesConsumerLocal
 num-processes: 2

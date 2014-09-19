@@ -1,4 +1,3 @@
-
 import sys
 import base64
 import binascii
@@ -6,19 +5,12 @@ import traceback
 import logging
 import time
 import copy
-import json
-import numpy as np
 
 sys.path.append('../proto')
 sys.path.append('./machinelearning')
 
 import matrix_pb2
 import classifer_pb2
-
-from MyPca import MyPca
-from MyGmm import MyGmmEnsemble
-
-k_min_maxloglik = float(-20.0)
 
 def matrix_message_to_class_message(message):
     mat = message.matrix_payload
@@ -44,69 +36,29 @@ def matrix_message_to_class_message(message):
     classifier_message.time2 = mat.time2
     
     return (classifier_message, mac)
-   
-def probs_to_audio_class_data(probs, maxidx):
-    classification = classifer_pb2.audio_class_data()
-
-    for p in probs:
-        classification.probability.append(p)
-
-    classification.classes.append(classifer_pb2.audio_class_data.TALKING)
-    classification.classes.append(classifer_pb2.audio_class_data.CRYING)
-    classification.classes.append(classifer_pb2.audio_class_data.SNORING)
-    classification.classes.append(classifer_pb2.audio_class_data.VEHICLE)
-
-    classification.decision = classification.classes[maxidx]
     
-    return classification
-
-    
-  
-#functor for GMM/PCA classification
-class GmmAndPcaClassifier():
+#functor example
+class PassThroughClassifier():
     def __init__(self, data):
         self.data = data
         
-        self.pca = MyPca()
-        self.gmm = MyGmmEnsemble()
-        
-        classifier_dict = json.loads(self.data['serialized_data'])
-        
-        self.pca.setFromDict(classifier_dict['pca'])
-        self.gmm.setFromDict(classifier_dict['gmmsensemble'])
-    
-    def evaluate(self, mat):
-        
-        vec = np.array(mat.idata).astype('float')
-        vec = vec[1:].reshape(1, len(mat.idata) - 1)
-
-        x = self.pca.transform(vec)
-        
-        probs = self.gmm.evaluate(x,k_min_maxloglik)
-        probs = probs[0] #we are only evaluate one vector at a time
-        
-        maxidx = np.argmax(probs)
-        
-        return (probs.tolist(), maxidx)
-
-    
     def __call__(self, record):
         try:
-            #deserialize matrix message
             message = matrix_pb2.MatrixClientMessage()
+        
+            #print record
             b64data = record['Data']
             message.ParseFromString(base64.b64decode(b64data))
-
+            
             classifier_message, mac = matrix_message_to_class_message(message)
-            probs, maxidx = self.evaluate(message.matrix_payload)
-            classification = probs_to_audio_class_data(probs, maxidx)
-
-            classifier_message.classification.CopyFrom(classification)
+            
+            if (self.data.has_key('key')):
+                classifier_message.classifer_key = self.data['key']
             
             bindata = classifier_message.SerializeToString()
             b64data = base64.b64encode(bindata)
             partition = mac
-             
+                        
             return (b64data, partition)
             
             

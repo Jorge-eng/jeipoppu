@@ -200,8 +200,14 @@ def init(config_file_name):
         #if we can get data from amazon for our classifier....
         s3reader = S3BucketReader(region, classifier_s3_bucket, access_key_id, secret_access_key).init_connection()
         
+
         if s3reader.conn is not None:
-            classifier_data = s3reader.get_linked_value(classifier_s3_key)
+            classifier_data = {}
+
+            my_classifier_key = s3reader.get_value(classifier_s3_key)
+            
+            classifier_data['serialized_data'] = s3reader.get_linked_value(classifier_s3_key)
+            classifier_data['key'] = my_classifier_key
             
             #set up processor
             processor = AudioFeaturesProcessing.AudioFeaturesProcessingThread(classifier_id, classifier_data, numproc, kwriter)

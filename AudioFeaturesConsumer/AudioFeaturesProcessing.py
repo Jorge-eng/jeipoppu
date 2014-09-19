@@ -14,13 +14,11 @@ sys.path.append('./machinelearning')
 import AudioClassifierFactory
 
 
-
 class AudioFeaturesProcessingThread(threading.Thread):
     def __init__(self, classifier_id, classifier_data, numprocs, writer):
         #set up thread
         threading.Thread.__init__(self)
         self.queue = Queue()
-        
         self.writer = writer
 
         #get classifier function object -- will output classification as a protobuf serialized message
