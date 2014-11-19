@@ -5,7 +5,7 @@ from AudioClassifierSimpleGmmAndPca import GmmAndPcaClassifier
 
 CLASSIFIER_PASS_THROUGH = "CLASSIFIER_PASS_THROUGH"
 CLASSIFIER_GMM_PCA = "CLASSIFIER_GMM_PCA"
-
+CLASSIFIER_LINEAR_SVM = "CLASSIFIER_LINEAR_SVM"
 def get(classifier_id, classifier_data):
     factory_dict = {
                     CLASSIFIER_PASS_THROUGH : PassThroughClassifier, 

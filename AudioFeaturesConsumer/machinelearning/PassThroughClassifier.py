@@ -5,58 +5,18 @@ import traceback
 import logging
 import time
 import copy
-
-from proto import matrix_pb2
-from proto import classifer_pb2
-
-def matrix_message_to_class_message(message):
-    mat = message.matrix_payload
-            
-    mac = binascii.hexlify(message.mac)
-
-    
-    class_data = classifer_pb2.audio_class_data()
-    classifier_message = classifer_pb2.audio_classifcation_message()
-
-    if mat.idata is not None:
-        for i in mat.idata:
-            classifier_message.feat_vec.append(float(i))
-            
-
-    
-    classifier_message.mac = copy.deepcopy(message.mac)
-    classifier_message.classifer_key  
-    classifier_message.tags  = mat.tags
-    classifier_message.source = mat.source
-    classifier_message.unix_time = message.unix_time
-    classifier_message.time1 = mat.time1
-    classifier_message.time2 = mat.time2
-    
-    return (classifier_message, mac)
-    
+import MatrixClientMessageDecoder
+ 
 #functor example
 class PassThroughClassifier(object):
     def __init__(self, data):
         self.data = data
         
     def __call__(self, record):
-        try:
-            message = matrix_pb2.MatrixClientMessage()
+        try:            
+            featmat, energysignal, maxenergies = MatrixClientMessageDecoder.time_history_from_matrix_client_message(record)
         
-            #print record
-            b64data = record['Data']
-            message.ParseFromString(base64.b64decode(b64data))
-            
-            classifier_message, mac = matrix_message_to_class_message(message)
-            
-            if (self.data.has_key('key')):
-                classifier_message.classifer_key = self.data['key']
-            
-            bindata = classifier_message.SerializeToString()
-            b64data = base64.b64encode(bindata)
-            partition = mac
-                        
-            return (b64data, partition)
+            print len(featmat), len(featmat[0]), len(energysignal), len(maxenergies) 
             
             
         except Exception, e:
