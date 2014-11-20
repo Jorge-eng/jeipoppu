@@ -9,10 +9,16 @@ from EnergySummary import *
 from MyLinearSvm import *
 import DataKeys
 
+from proto import audio_classification_pb2
+
 class LinearSvmAndEnergySummarizer(object):
     def __init__(self, data):
         classifier_data = data[DataKeys.k_classifier_data]
         self.svm = MyLinearSvm(classifier_data)
+
+        #maps clasifier output to enums contained in 
+        #output protobuf
+        self.class_map = data[DataKeys.k_class_map]
         
         
     def __call__(self, record):

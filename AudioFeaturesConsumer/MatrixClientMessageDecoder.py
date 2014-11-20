@@ -45,6 +45,7 @@ def time_history_from_matrix_client_message(record):
         
         mac_hex = binascii.hexlify(message.mac)
         unix_time = message.unix_time
+        device_id = mac_hex
         
         #process repeated matrix entries
         N = len(message.matrix_list)
@@ -81,4 +82,4 @@ def time_history_from_matrix_client_message(record):
         
 
 
-    return (featmat, energysignal, maxenergies)
+    return (featmat, energysignal, maxenergies, unix_time, device_id)
