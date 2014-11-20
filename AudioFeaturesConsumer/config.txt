@@ -4,7 +4,7 @@
 region: us-east-1
 
 #latest,earliest,resume  - where in kinesis that you are starting from
-kinesis-start-position: resume
+kinesis-start-position: earliest
 
 #the string that is the name of the kinesis stream you are using
 kinesis-read-stream: audio_features
@@ -32,9 +32,8 @@ log-level: INFO
 #True/False
 print-to-stdout: True
 
-#classifier-id: pca-gmm
 #classifier-id: CLASSIFIER_PASS_THROUGH
-classifier-id: CLASSIFIER_GMM_PCA
+classifier-id: CLASSIFIER_LINEAR_SVM_AND_HMM
 
 app-id: AudioFeaturesConsumerLocal
 num-processes: 2
