@@ -15,17 +15,20 @@ def get_as_floating_point(x):
     
 def get_as_db_from_log2(x):
     y = x*6.0; #every power of 2 is about 6dB
+    return y
 
 #supposed to operate on a minute's worth of data
 def get_energy_summary(energysignal, maxenergies):
-    xe = get_as_db_from_log2(get_as_floating_point(energysignal))
+    x = np.array(energysignal)
+    f = get_as_floating_point(x)
+    fe = get_as_db_from_log2(f)
         
-    maxenergy_in_db = np.amax(xe)
+    max_energy_in_db = np.amax(fe)
     
     disturbance_count = 0
     
     #make this simple
-    if (maxenergy_in_db > k_disturbance_threshold_db):
+    if (max_energy_in_db > k_disturbance_threshold_db):
         disturbance_count = 1;
         
         
